@@ -12,7 +12,7 @@ services:
     image: ${REGISTRY}/${APP1_IMAGE}:${APP1_VERSION}
     container_name: app1-static-${ENVIRONMENT}
     volumes:
-      - /usr/share/nginx/html/app1  # Volume containing static files
+      - app1-assets:/usr/share/nginx/html  # Volume containing static files
     command: sleep infinity  # Keep container running for volume access
     restart: unless-stopped
     healthcheck:
@@ -25,7 +25,7 @@ services:
     image: ${REGISTRY}/${APP2_IMAGE}:${APP2_VERSION}
     container_name: app2-static-${ENVIRONMENT}
     volumes:
-      - /usr/share/nginx/html/app2  # Volume containing static files
+      - app2-assets:/usr/share/nginx/html  # Volume containing static files
     command: sleep infinity  # Keep container running for volume access
     restart: unless-stopped
     healthcheck:
@@ -64,12 +64,11 @@ services:
       - APP1_DOMAIN=${APP1_DOMAIN}
       - APP2_DOMAIN=${APP2_DOMAIN}
       - ENVIRONMENT=${ENVIRONMENT}
-    volumes_from:
-      - app1-static  # Mounts /usr/share/nginx/html/app1
-      - app2-static  # Mounts /usr/share/nginx/html/app2
     volumes:
       - ssl-certs:/etc/letsencrypt
       - nginx-challenges:/var/www/certbot
+      - app1-assets:/usr/share/nginx/html/app1:ro
+      - app2-assets:/usr/share/nginx/html/app2:ro
     networks:
       - public-network
       - private-network
