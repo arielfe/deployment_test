@@ -61,6 +61,7 @@ services:
       - nginx-challenges:/var/www/certbot
       - app1-assets:/usr/share/nginx/html/app1:ro
       - app2-assets:/usr/share/nginx/html/app2:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
       - public-network
       - private-network
