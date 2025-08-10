@@ -1,11 +1,3 @@
-version: '3.8'
-
-# =================================================================
-# VOLUME SHARING SOLUTION
-# Frontend containers only contain static files (no nginx)
-# Single nginx container serves all content via volumes_from
-# =================================================================
-
 services:
   # Frontend Static File Containers (no nginx, just files)
   app1-static:
@@ -103,6 +95,8 @@ volumes:
     name: ${ENVIRONMENT}-ssl-certs
   nginx-challenges:
     name: ${ENVIRONMENT}-nginx-challenges
+  app1-assets:
+  app2-assets:
 
 networks:
   public-network:
