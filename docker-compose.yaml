@@ -1,0 +1,114 @@
+version: '3.8'
+
+# =================================================================
+# VOLUME SHARING SOLUTION
+# Frontend containers only contain static files (no nginx)
+# Single nginx container serves all content via volumes_from
+# =================================================================
+
+services:
+  # Frontend Static File Containers (no nginx, just files)
+  app1-static:
+    image: ${REGISTRY}/${APP1_IMAGE}:${APP1_VERSION}
+    container_name: app1-static-${ENVIRONMENT}
+    volumes:
+      - /usr/share/nginx/html/app1  # Volume containing static files
+    command: sleep infinity  # Keep container running for volume access
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "test", "-f", "/usr/share/nginx/html/app1/index.html"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  app2-static:
+    image: ${REGISTRY}/${APP2_IMAGE}:${APP2_VERSION}
+    container_name: app2-static-${ENVIRONMENT}
+    volumes:
+      - /usr/share/nginx/html/app2  # Volume containing static files
+    command: sleep infinity  # Keep container running for volume access
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "test", "-f", "/usr/share/nginx/html/app2/index.html"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API
+  backend:
+    image: ${REGISTRY}/${BACKEND_IMAGE}:${BACKEND_VERSION}
+    container_name: backend-${ENVIRONMENT}
+    environment:
+      - NODE_ENV=${ENVIRONMENT}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - API_PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    networks:
+      - private-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Single Nginx - serves static files via volumes_from + proxies API
+  nginx:
+    image: nginx:1.29.0-alpine
+    container_name: nginx-${ENVIRONMENT}
+    ports:
+      - "${HTTP_PORT}:80"
+      - "${HTTPS_PORT}:443"
+    environment:
+      - APP1_DOMAIN=${APP1_DOMAIN}
+      - APP2_DOMAIN=${APP2_DOMAIN}
+      - ENVIRONMENT=${ENVIRONMENT}
+    volumes_from:
+      - app1-static  # Mounts /usr/share/nginx/html/app1
+      - app2-static  # Mounts /usr/share/nginx/html/app2
+    volumes:
+      - ssl-certs:/etc/letsencrypt
+      - nginx-challenges:/var/www/certbot
+    networks:
+      - public-network
+      - private-network
+    depends_on:
+      - app1-static
+      - app2-static
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/nginx-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # SSL Certificate Management
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot-${ENVIRONMENT}
+    volumes:
+      - ssl-certs:/etc/letsencrypt
+      - nginx-challenges:/var/www/certbot
+    networks:
+      - public-network
+    environment:
+      - DOMAINS=${APP1_DOMAIN},${APP2_DOMAIN}
+      - EMAIL=${CERT_EMAIL}
+    command: sh -c "while :; do sleep 6h & wait; certbot renew; done"
+    restart: unless-stopped
+
+volumes:
+  ssl-certs:
+    name: ${ENVIRONMENT}-ssl-certs
+  nginx-challenges:
+    name: ${ENVIRONMENT}-nginx-challenges
+
+networks:
+  public-network:
+    name: ${ENVIRONMENT}-public
+    driver: bridge
+  private-network:
+    name: ${ENVIRONMENT}-private
+    driver: bridge
